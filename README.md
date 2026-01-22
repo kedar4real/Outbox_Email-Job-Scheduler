@@ -1,310 +1,171 @@
-ReachInbox Email Scheduler Backend
-=================================
+# ReachInbox-Style Email Scheduler
 
-Project overview
-----------------
-Backend API + worker for scheduling email campaigns. Campaigns and jobs are stored in Postgres, scheduled through BullMQ, and sent via SMTP.
+A production-grade email scheduling service with a dashboard, supporting delayed sends, rate limiting, persistence across restarts, and Google OAuth authentication.
 
-Key features
-- Google OAuth login and JWT-based API access
-- Recipient validation and de-duplication
-- BullMQ delayed jobs for scheduling
-- Idempotent job processing (DB status transition + BullMQ jobId)
-- Rate limiting per sender using Redis
-- Configurable worker concurrency and minimum delay between sends
-- Request correlation IDs in logs
+## Demo Video
 
-Tech stack
-- TypeScript, Express
-- Prisma + PostgreSQL
+Demo video (5 minutes): <PASTE_YOUTUBE_LINK_HERE>
+
+The video demonstrates scheduling emails, viewing scheduled and sent emails, restart persistence, and rate limiting behavior.
+
+## Features Overview
+
+- Google OAuth login (no passwords stored)
+- Email scheduling using BullMQ delayed jobs (no cron)
+- Persistent job storage across restarts
+- Multiple senders support
+- Per-sender hourly rate limiting (Redis-backed)
+- Configurable worker concurrency and send delays
+- Idempotent job processing
+- Scheduled and sent email dashboards
+- CSV upload with validation and de-duplication
+- Fake SMTP delivery using Ethereal Email
+
+## Tech Stack
+
+Backend
+- TypeScript
+- Express.js
+- PostgreSQL + Prisma
 - BullMQ + Redis
 - Nodemailer (Ethereal SMTP)
-- Zod validation
-- Pino logging
+- Zod (validation)
+- Pino (logging)
+
+Frontend
+- Next.js
+- React
+- TypeScript
+- Tailwind CSS
+
+Infrastructure
+- Docker & Docker Compose (Postgres, Redis)
+
+## Architecture Overview
+
+The API server handles authentication, campaign creation, and job persistence. Jobs are stored in PostgreSQL and scheduled using BullMQ delayed jobs. Redis backs BullMQ and rate-limit counters. The worker runs as a separate process and sends emails via SMTP. The frontend communicates with backend APIs using a JWT obtained after Google OAuth.
+
+Flow:
+Frontend -> API (Express) -> PostgreSQL
+                     -> BullMQ (Redis) -> Worker -> Ethereal SMTP
+
+## Persistence & Restart Safety
+
+Delayed jobs are stored in Redis by BullMQ. Job state is stored in PostgreSQL. On restart, workers resume pending jobs without duplication. Idempotency is enforced using database status transitions and BullMQ `jobId = EmailJob.id`.
+
+## Rate Limiting & Concurrency
+
+Per-sender hourly rate limits are enforced using Redis with a sliding 1-hour window. When the limit is exceeded, jobs are rescheduled rather than dropped. Order is preserved using calculated delays. Worker concurrency is configurable via environment variables, and a minimum delay between sends simulates provider throttling. The trade-off is that large backlogs can push schedules beyond the next hour window.
+
+## Local Setup Instructions
 
 Prerequisites
--------------
 - Node.js 18+
-- Docker and Docker Compose
-- npm or pnpm
+- Docker + Docker Compose
+- npm
 
-Setup instructions
-------------------
-1) Install dependencies
-   - `cd backend`
-   - `npm install`
+Default ports
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:3001`
 
-2) Configure environment
-   - Copy `backend/.env.example` to `backend/.env`
-   - Fill in Google OAuth and Ethereal SMTP credentials
+Backend setup
+1. `cd backend`
+2. `cp .env.example .env`
+3. `docker compose -f docker-compose.yml up -d`
+4. `npm install`
+5. `npm run prisma:migrate`
 
-3) Get Ethereal Email credentials
-   - Visit https://ethereal.email/create
-   - Click "Create Ethereal Account"
-   - Copy the credentials:
-     * SMTP_HOST=smtp.ethereal.email
-     * SMTP_PORT=587
-     * SMTP_USER=<generated username>
-     * SMTP_PASS=<generated password>
-   - Paste into `.env`
-   - View sent emails at https://ethereal.email/messages
+Start services
+- `npm run dev`   # API
+- `npm run worker` # Worker (separate terminal)
 
-4) Start infrastructure
-   - `docker compose -f backend/docker-compose.yml up -d`
+The worker must be running for emails to be sent.
 
-5) Run Prisma migrations
-   - `npm run prisma:migrate`
+Frontend setup
+1. `cd frontend`
+2. `cp .env.example .env.local`
+3. `npm install`
+4. `npm run dev`
 
-6) Start API and worker
-   - Terminal 1: `npm run dev`
-   - Terminal 2: `npm run worker`
-   - Or run both: `npm run dev:all`
-   - The worker must be running for emails to send
+## Environment Configuration
 
-7) Start frontend
-   - `cd frontend`
-   - Copy `frontend/.env.example` to `frontend/.env.local`
-   - Set `NEXT_PUBLIC_BACKEND_URL` to the backend base URL
-   - `npm install`
-   - `npm run dev`
+Secrets are provided via local environment files and are not committed. Use placeholders where required.
 
-Available scripts
------------------
-- `npm run dev` - start the API with hot reload
-- `npm run worker` - start the BullMQ worker with hot reload
-- `npm run dev:all` - run API and worker in parallel
-- `npm run build` - compile TypeScript
-- `npm run start` - run compiled server
-- `npm run prisma:generate` - generate Prisma client
-- `npm run prisma:migrate` - run migrations
-- `npm run prisma:reset` - reset database
-- `npm run prisma:studio` - open Prisma Studio
-- `npm run prisma:seed` - run seed script
-
-Environment variables
----------------------
-Application
-- `NODE_ENV` - development | production | test
-- `PORT` - API port
-
-Database
-- `DATABASE_URL` - Postgres connection string
-
-Redis
+Backend (Required)
+- `DATABASE_URL`
 - `REDIS_HOST`
 - `REDIS_PORT`
+- `JWT_SECRET`
+- `FRONTEND_URL`
 
-Google OAuth
+Google OAuth (Required)
+- Authorized JavaScript origin: `http://localhost:3000`
+- Authorized redirect URI: `http://localhost:3001/api/auth/google/callback`
+
+Required variables:
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_CALLBACK_URL`
 
-JWT
-- `JWT_SECRET` - at least 32 chars in production
+Users sign in with their own Google account. The app never stores passwords.
 
-SMTP (Ethereal)
+Ethereal Email (Required)
+- Ethereal is a fake SMTP service.
+- Emails are not delivered to real inboxes.
+- Preview URLs are logged by the worker.
+
+Required variables:
 - `SMTP_HOST`
 - `SMTP_PORT`
 - `SMTP_USER`
 - `SMTP_PASS`
 
-Queue configuration
-- `WORKER_CONCURRENCY`
-- `MIN_DELAY_BETWEEN_EMAILS`
-- `MAX_EMAILS_PER_HOUR`
+Frontend (Required)
+- `NEXT_PUBLIC_BACKEND_URL`
 
-CORS
-- `FRONTEND_URL`
+Frontend (Optional, only if NextAuth is enabled)
+- `NEXT_PUBLIC_API_URL`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
 
-Logging
-- `LOG_LEVEL` - debug | info | warn | error
+## API Overview (High-Level)
 
-Optional seed data
-- `SEED_GOOGLE_ID`
-- `SEED_EMAIL`
-- `SEED_NAME`
-- `SEED_SENDER_EMAIL`
-- `SEED_SENDER_NAME`
-
-Frontend environment variables
-------------------------------
-- `NEXT_PUBLIC_BACKEND_URL` - backend base URL for API calls
-- `NEXT_PUBLIC_API_URL` - optional backend base URL for NextAuth (if enabled)
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - optional NextAuth credentials
-
-Architecture overview
----------------------
-System components
-- API server: Express app with validation, auth, and campaign/job endpoints
-- Database: Postgres for users, campaigns, jobs, and rate limit windows
-- Queue: BullMQ with Redis backing for delayed job scheduling
-- Worker: Separate process that sends emails and enforces rate limits
-
-System diagram (text)
----------------------
-Client (Next.js)
-  |
-  v
-API (Express) -> PostgreSQL (Campaigns, Jobs, Senders)
-  |
-  v
-BullMQ (Redis) -> Worker -> SMTP (Ethereal)
-
-Scheduling data flow
-1) Client submits campaign
-2) Campaign and jobs are stored in Postgres
-3) Jobs are enqueued to BullMQ with a delay based on schedule
-4) Worker picks jobs, checks rate limits, and sends emails
-5) Job status updated to SENT or FAILED
-
-Restart persistence
-- BullMQ stores job state in Redis; delayed jobs survive restarts
-- EmailJob status in Postgres ensures idempotency
-- Worker uses atomic status transitions to prevent double sends
-
-Rate limiting
-- Redis sorted set per sender: `rate-limit:{senderId}`
-- Sliding window of 1 hour; if limit exceeded, job is rescheduled
-
-Rate limiting details
----------------------
-Strategy
-- Sliding window with Redis sorted sets, keyed by sender.
-- Each successful send adds a timestamp entry.
-- On limit hit, we compute the next available hour from the oldest entry.
-
-Rescheduling behavior
-- Jobs are rescheduled into the next available hour window.
-- Order is preserved by assigning a per-window sequence offset using
-  `MIN_DELAY_BETWEEN_EMAILS`.
-
-Trade-offs
-- Redis provides fast window checks but requires TTL hygiene.
-- Large backlogs can push rescheduled jobs beyond the next hour window.
-
-Idempotency
-- BullMQ jobId is set to EmailJob.id
-- DB update from SCHEDULED/RESCHEDULED to SENDING is atomic
-
-API endpoints
--------------
 Auth
-- `GET /api/auth/google` - start Google OAuth
-- `POST /api/auth/google` - start Google OAuth (alternative)
-- `GET /api/auth/google/callback` - OAuth callback
-- `POST /api/auth/logout` - logout
-- `GET /api/auth/me` - current user
+- `/api/auth/*`
 
 Campaigns
-- `POST /api/campaigns` - create campaign
-- `GET /api/campaigns` - list campaigns
-- `GET /api/campaigns/:id` - campaign detail
+- `/api/campaigns/*`
 
-Jobs
-- `GET /api/jobs/scheduled` - scheduled/rescheduled jobs
-- `GET /api/jobs/sent` - sent/failed jobs
-
-Health
-- `GET /api/health` - basic health
-- `GET /api/health/detailed` - detailed health
-- `GET /api/config` - worker configuration
-
-CSV
-- `POST /api/csv/validate` - validate CSV or email array
+Jobs (scheduled / sent)
+- `/api/jobs/scheduled`
+- `/api/jobs/sent`
+- `/api/jobs/:id` (DELETE)
 
 Senders
-- `POST /api/senders` - create sender
-- `GET /api/senders` - list senders
-- `DELETE /api/senders/:id` - delete sender
+- `/api/senders/*`
 
-Features checklist
-------------------
-- Google OAuth 2.0 login + JWT auth
-- Campaign scheduling via BullMQ delayed jobs
-- Per-sender rate limiting with Redis
-- Rescheduling on rate limit with order preservation
-- Idempotent job processing via DB status + BullMQ jobId
-- Structured logging with correlation IDs
-- Scheduled and sent job dashboards
+CSV validation
+- `/api/csv/validate`
 
-Development workflow
---------------------
-- Run `npm run dev:all` for API + worker
-- Use `docker compose -f backend/docker-compose.yml up -d` for infra
-- Inspect DB with Prisma Studio (`npm run prisma:studio`)
-- Inspect Redis with Redis Commander (`http://localhost:8081`)
-- Logs are structured JSON in production and pretty in development
+Health endpoints
+- `/api/health`
+- `/api/health/detailed`
+- `/api/config`
 
-Testing
--------
-- Ethereal: use credentials in `.env` and check preview URLs logged by the worker
-- Rate limiting: set `MAX_EMAILS_PER_HOUR` low and schedule multiple jobs
-- Restart behavior: stop the worker and API, then restart; delayed jobs should still send
+## Troubleshooting
 
-Behavior under load
--------------------
-- Jobs are enqueued with calculated delays (`scheduledAt + delayBetweenEmails * index`).
-- Worker runs with configured concurrency and a BullMQ limiter.
-- Rate limit is checked before each send; on hit, jobs are rescheduled.
+- Redis ECONNREFUSED -> Docker not running
+- Prisma P1001 -> Postgres not reachable
+- 401 AUTH_MISSING -> Missing Bearer token
+- Email not received -> Ethereal is fake SMTP
+- Jobs stuck -> Worker not running
 
-Behavior under load (1000+ emails)
----------------------------------
-- The API inserts jobs in a single transaction and enqueues in bulk.
-- BullMQ uses delayed jobs; Redis persists them across restarts.
-- If rate limits are exceeded, jobs are rescheduled into future windows
-  while preserving order per sender.
+## Deployment Notes
 
-Production considerations
--------------------------
-- Use a managed Postgres and Redis
-- Scale workers horizontally (BullMQ supports multiple workers)
-- Set strong `JWT_SECRET` and secure OAuth credentials
-- Centralize logs and add monitoring/alerting
+Backend and worker should run as separate processes. Use managed PostgreSQL and Redis in production. Update Google OAuth redirect URIs for deployed domains. Scale workers horizontally if needed.
 
-OAuth deployment notes
-----------------------
-- Google OAuth Console:
-  - Authorized JavaScript origins: deployed frontend domain
-  - Authorized redirect URIs: backend `GOOGLE_CALLBACK_URL`
-- Login is Google-only; the app does not collect passwords.
-  Recruiters should sign in with their own Google account.
+## Assumptions & Trade-offs
 
-Security and hardening notes
-----------------------------
-- CORS is restricted to `FRONTEND_URL` in `backend/src/server.ts`.
-- API rate limiting is enabled via `express-rate-limit`.
-- Request validation is enforced with Zod on endpoints that accept payloads or query params.
-- Sensitive headers (Authorization, cookies) are redacted in request logs.
-
-Demo video
-----------
-- Add a demo video at `./demo/demo-video.mp4` or provide a link.
-- Suggested flow:
-  1) Create a campaign with CSV upload
-  2) Scheduled emails dashboard
-  3) Restart API/worker; jobs persist
-  4) Sent emails tab
-
-Submission guidelines
----------------------
-- Create a private GitHub repository
-- Grant access to user: Mitrajit
-- Ensure this README includes setup, architecture, and endpoints
-- Include a short demo video (max 5 minutes)
-- Note assumptions, shortcuts, and trade-offs
-
-Known limitations
------------------
-- CSV drag-and-drop is not implemented; file upload is supported.
-- Rescheduling offsets can push jobs beyond the immediate next hour window under heavy load.
-
-Assumptions / trade-offs
-------------------------
-- Rate limits are enforced per sender (not per campaign).
-- Worker relies on BullMQ retry backoff for transient SMTP failures.
-
-Future enhancements
--------------------
-- Add CSV drag-and-drop with client-side validation.
-- Add richer pagination controls and server-driven filters for dashboards.
-- Add email template variables and preview rendering.
+- Rate limiting is per sender (not global).
+- Ethereal is used only for testing.
+- Focus is correctness and persistence, not bulk throughput.
