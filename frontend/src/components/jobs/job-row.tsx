@@ -12,7 +12,7 @@ interface JobRowProps {
 
 /** Render the JobRow component. */
 export default function JobRow({ job, onSelect, onRemove }: JobRowProps) {
-  const time = formatJobTime(job.scheduledAt ?? job.scheduledTime ?? job.sentAt ?? job.sentTime);
+  const time = formatJobTime(job.scheduledAt ?? job.sentAt);
 
   return (
     <div className="flex w-full items-center justify-between gap-4 rounded-2xl border border-border/70 bg-white px-5 py-4 text-left transition hover:bg-white">
