@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { Sender } from '@/types/sender';
+import { isDemoMode } from '@/lib/utils/demo';
 
 function normalizeSender(raw: any): Sender {
   return {
@@ -12,6 +13,22 @@ function normalizeSender(raw: any): Sender {
 
 /** listSenders helper. */
 export async function listSenders(): Promise<Sender[]> {
+  if (isDemoMode()) {
+    return [
+      {
+        id: 'demo-sender-1',
+        name: 'Demo Campaigns',
+        email: 'sender@example.com',
+        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString()
+      },
+      {
+        id: 'demo-sender-2',
+        name: 'Outbound Ops',
+        email: 'ops@example.com',
+        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString()
+      }
+    ];
+  }
   const { data } = await apiClient.get('/api/senders');
   if (Array.isArray(data)) {
     return data.map(normalizeSender);
@@ -30,6 +47,14 @@ export async function listSenders(): Promise<Sender[]> {
 
 /** createSender helper. */
 export async function createSender(payload: Pick<Sender, 'name' | 'email'>): Promise<Sender> {
+  if (isDemoMode()) {
+    return {
+      id: `demo-sender-${Date.now()}`,
+      name: payload.name,
+      email: payload.email,
+      createdAt: new Date().toISOString()
+    };
+  }
   const { data } = await apiClient.post('/api/senders', {
     displayName: payload.name,
     email: payload.email
@@ -40,5 +65,8 @@ export async function createSender(payload: Pick<Sender, 'name' | 'email'>): Pro
 
 /** deleteSender helper. */
 export async function deleteSender(senderId: string): Promise<void> {
+  if (isDemoMode()) {
+    return;
+  }
   await apiClient.delete(`/api/senders/${senderId}`);
 }

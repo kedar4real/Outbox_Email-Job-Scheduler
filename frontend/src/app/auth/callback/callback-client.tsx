@@ -16,7 +16,7 @@ export default function CallbackClient() {
     const token = searchParams.get('token');
     if (token) {
       setAuthToken(token);
-      router.replace('/app');
+      router.replace('/app/compose');
     } else {
       setMissing(true);
     }

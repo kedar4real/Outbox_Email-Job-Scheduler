@@ -2,15 +2,6 @@
 const nextConfig = {
   images: {
     remotePatterns: [{ protocol: 'https', hostname: '**' }]
-  },
-  async redirects() {
-    return [
-      {
-        source: '/',
-        destination: '/app/compose',
-        permanent: false
-      }
-    ];
   }
 };
 

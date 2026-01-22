@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getAuthToken } from '@/lib/auth/token';
+import { isDemoMode } from '@/lib/utils/demo';
 
 /** useRequireAuth helper. */
 export function useRequireAuth(redirectTo = '/') {
@@ -10,6 +11,10 @@ export function useRequireAuth(redirectTo = '/') {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    if (isDemoMode()) {
+      setReady(true);
+      return;
+    }
     const token = getAuthToken();
     if (!token) {
       router.replace(redirectTo);

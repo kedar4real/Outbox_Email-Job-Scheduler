@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { Job, JobStatus, PaginatedJobs } from '@/types/job';
+import { isDemoMode } from '@/lib/utils/demo';
 
 function normalizeJob(raw: any): Job {
   const statusMap: Record<string, JobStatus> = {
@@ -80,6 +81,33 @@ export async function listScheduledJobs(params?: {
   page?: number;
   limit?: number;
 }): Promise<PaginatedJobs> {
+  if (isDemoMode()) {
+    const now = Date.now();
+    const jobs: Job[] = [
+      {
+        id: 'demo-job-1',
+        email: 'jordan@northwind.io',
+        subject: 'Onboarding sequence',
+        scheduledAt: new Date(now + 1000 * 60 * 15).toISOString(),
+        status: 'scheduled'
+      },
+      {
+        id: 'demo-job-2',
+        email: 'alex@contoso.com',
+        subject: 'Feature announcement',
+        scheduledAt: new Date(now + 1000 * 60 * 40).toISOString(),
+        status: 'rescheduled'
+      },
+      {
+        id: 'demo-job-3',
+        email: 'sam@adatum.com',
+        subject: 'Weekly digest',
+        scheduledAt: new Date(now + 1000 * 60 * 90).toISOString(),
+        status: 'scheduled'
+      }
+    ];
+    return { jobs, total: jobs.length, page: 1, limit: jobs.length, totalPages: 1 };
+  }
   const { data } = await apiClient.get('/api/jobs/scheduled', { params });
   return extractPaginatedJobs(data);
 }
@@ -93,6 +121,34 @@ export async function listSentJobs(params?: {
   page?: number;
   limit?: number;
 }): Promise<PaginatedJobs> {
+  if (isDemoMode()) {
+    const now = Date.now();
+    const jobs: Job[] = [
+      {
+        id: 'demo-job-4',
+        email: 'casey@tailspin.io',
+        subject: 'Trial conversion',
+        sentAt: new Date(now - 1000 * 60 * 25).toISOString(),
+        status: 'sent'
+      },
+      {
+        id: 'demo-job-5',
+        email: 'taylor@fabrikam.com',
+        subject: 'Renewal reminder',
+        sentAt: new Date(now - 1000 * 60 * 60).toISOString(),
+        status: 'sent'
+      },
+      {
+        id: 'demo-job-6',
+        email: 'lee@humane.ai',
+        subject: 'Re-engagement',
+        sentAt: new Date(now - 1000 * 60 * 95).toISOString(),
+        status: 'failed',
+        lastError: 'Mailbox full'
+      }
+    ];
+    return { jobs, total: jobs.length, page: 1, limit: jobs.length, totalPages: 1 };
+  }
   const queryParams: Record<string, string | number> = {};
   if (params?.status) queryParams.status = params.status;
   if (params?.page) queryParams.page = params.page;
@@ -107,5 +163,8 @@ export async function listSentJobs(params?: {
  * Cancel a scheduled job by id.
  */
 export async function cancelJob(jobId: string): Promise<void> {
+  if (isDemoMode()) {
+    return;
+  }
   await apiClient.delete(`/api/jobs/${jobId}`);
 }
