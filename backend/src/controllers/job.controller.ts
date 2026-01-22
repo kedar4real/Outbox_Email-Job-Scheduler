@@ -1,10 +1,19 @@
 import { Response, NextFunction } from "express";
+import { JobStatus } from "@prisma/client";
 
 import { prisma } from "../config/database";
 import { emailQueue } from "../queues/email.queue";
 import { RequestWithUser } from "../types/common.types";
-import { ForbiddenError, NotFoundError, ValidationError } from "../utils/errors";
+import { AuthError, ForbiddenError, NotFoundError, ValidationError } from "../utils/errors";
 import { logger } from "../utils/logger";
+
+const getUserId = (req: RequestWithUser): string => {
+  const userId = req.user?.userId;
+  if (!userId) {
+    throw new AuthError("Missing authentication token", "AUTH_MISSING");
+  }
+  return userId;
+};
 
 /**
  * Lists scheduled/rescheduled jobs for the authenticated user.
@@ -16,7 +25,7 @@ import { logger } from "../utils/logger";
  */
 const getScheduledJobs = async (req: RequestWithUser, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.userId;
+    const userId = getUserId(req);
     const page = Number(req.query.page ?? 1);
     const limit = Number(req.query.limit ?? 20);
     const skip = (page - 1) * limit;
@@ -27,14 +36,16 @@ const getScheduledJobs = async (req: RequestWithUser, res: Response, next: NextF
         : "scheduledAt";
     const sortOrder = req.query.sortOrder === "asc" ? "asc" : "desc";
 
-    const allowedStatuses = new Set(["SCHEDULED", "SENDING", "RESCHEDULED"]);
+    const allowedStatuses: JobStatus[] = ["SCHEDULED", "SENDING", "RESCHEDULED"];
+    const requestedStatus =
+      typeof req.query.status === "string" ? req.query.status.toUpperCase() : null;
     const statusFilter =
-      typeof req.query.status === "string" && allowedStatuses.has(req.query.status.toUpperCase())
-        ? req.query.status.toUpperCase()
+      requestedStatus && allowedStatuses.includes(requestedStatus as JobStatus)
+        ? (requestedStatus as JobStatus)
         : null;
 
     const where = {
-      status: statusFilter ? statusFilter : { in: ["SCHEDULED", "SENDING", "RESCHEDULED"] },
+      status: statusFilter ? statusFilter : { in: allowedStatuses },
       campaign: { userId }
     };
 
@@ -77,7 +88,7 @@ const getScheduledJobs = async (req: RequestWithUser, res: Response, next: NextF
  */
 const getSentJobs = async (req: RequestWithUser, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.userId;
+    const userId = getUserId(req);
     const page = Number(req.query.page ?? 1);
     const limit = Number(req.query.limit ?? 20);
     const skip = (page - 1) * limit;
@@ -88,14 +99,16 @@ const getSentJobs = async (req: RequestWithUser, res: Response, next: NextFuncti
         : "updatedAt";
     const sortOrder = req.query.sortOrder === "asc" ? "asc" : "desc";
 
-    const allowedStatuses = new Set(["SENT", "FAILED"]);
+    const allowedStatuses: JobStatus[] = ["SENT", "FAILED"];
+    const requestedStatus =
+      typeof req.query.status === "string" ? req.query.status.toUpperCase() : null;
     const statusFilter =
-      typeof req.query.status === "string" && allowedStatuses.has(req.query.status.toUpperCase())
-        ? req.query.status.toUpperCase()
+      requestedStatus && allowedStatuses.includes(requestedStatus as JobStatus)
+        ? (requestedStatus as JobStatus)
         : null;
 
     const where = {
-      status: statusFilter ? statusFilter : { in: ["SENT", "FAILED"] },
+      status: statusFilter ? statusFilter : { in: allowedStatuses },
       campaign: { userId }
     };
 
@@ -133,7 +146,7 @@ const getSentJobs = async (req: RequestWithUser, res: Response, next: NextFuncti
  */
 const cancelScheduledJob = async (req: RequestWithUser, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.userId;
+    const userId = getUserId(req);
     const jobId = req.params.id;
 
     const job = await prisma.emailJob.findUnique({

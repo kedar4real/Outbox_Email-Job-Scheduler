@@ -2,15 +2,23 @@ import { Response, NextFunction } from "express";
 
 import { prisma } from "../config/database";
 import { RequestWithUser } from "../types/common.types";
-import { ValidationError, NotFoundError, ForbiddenError } from "../utils/errors";
+import { ValidationError, NotFoundError, ForbiddenError, AuthError } from "../utils/errors";
 import { logger } from "../utils/logger";
+
+const getUserId = (req: RequestWithUser): string => {
+  const userId = req.user?.userId;
+  if (!userId) {
+    throw new AuthError("Missing authentication token", "AUTH_MISSING");
+  }
+  return userId;
+};
 
 /**
  * Creates a new sender for the authenticated user.
  */
 const createSender = async (req: RequestWithUser, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.userId;
+    const userId = getUserId(req);
     const { email, displayName } = req.body as { email: string; displayName: string };
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -43,7 +51,7 @@ const createSender = async (req: RequestWithUser, res: Response, next: NextFunct
  */
 const getSenders = async (req: RequestWithUser, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.userId;
+    const userId = getUserId(req);
     const senders = await prisma.sender.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" }
@@ -61,7 +69,7 @@ const getSenders = async (req: RequestWithUser, res: Response, next: NextFunctio
  */
 const deleteSender = async (req: RequestWithUser, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.userId;
+    const userId = getUserId(req);
     const senderId = req.params.id;
 
     const sender = await prisma.sender.findUnique({ where: { id: senderId } });

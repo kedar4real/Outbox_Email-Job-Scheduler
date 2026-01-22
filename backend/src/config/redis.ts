@@ -24,7 +24,7 @@ redisClient.on("connect", () => logger.info("Redis connect"));
 redisClient.on("ready", () => logger.info("Redis ready"));
 redisClient.on("error", (error) => logger.error({ error }, "Redis error"));
 redisClient.on("close", () => logger.warn("Redis connection closed"));
-redisClient.on("reconnecting", (time) => logger.warn({ time }, "Redis reconnecting"));
+redisClient.on("reconnecting", (time: number) => logger.warn({ time }, "Redis reconnecting"));
 
 const shutdownRedis = async (signal: string) => {
   logger.info({ signal }, "Shutting down Redis client");

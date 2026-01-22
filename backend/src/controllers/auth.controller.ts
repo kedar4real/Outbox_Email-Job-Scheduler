@@ -4,6 +4,7 @@ import passport from "passport";
 import { AuthService } from "../services/auth.service";
 import { env } from "../config/env";
 import { RequestWithUser } from "../types/common.types";
+import { AuthError } from "../utils/errors";
 
 const authService = new AuthService();
 
@@ -11,7 +12,7 @@ const authService = new AuthService();
  * Initiates Google OAuth flow.
  */
 const googleAuth = (req: Request, res: Response, next: NextFunction) => {
-  passport.authenticate("google", { scope: ["profile", "email"], session: false, state: true })(
+  passport.authenticate("google", { scope: ["profile", "email"], session: false })(
     req,
     res,
     next
@@ -57,6 +58,9 @@ const logout = (req: Request, res: Response) => {
  * Returns the authenticated user.
  */
 const getCurrentUser = (req: RequestWithUser, res: Response) => {
+  if (!req.user?.userId) {
+    throw new AuthError("Missing authentication token", "AUTH_MISSING");
+  }
   res.status(200).json({ success: true, data: req.user });
 };
 

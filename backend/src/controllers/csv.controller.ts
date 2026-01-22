@@ -1,7 +1,7 @@
 import { Response, NextFunction } from "express";
 
 import { RequestWithUser } from "../types/common.types";
-import { ValidationError } from "../utils/errors";
+import { AuthError, ValidationError } from "../utils/errors";
 import { logger } from "../utils/logger";
 
 type CsvValidationResult = {
@@ -50,6 +50,14 @@ const parseCsvBuffer = (csvText: string): string[] => {
     .filter((entry) => entry.length > 0);
 };
 
+const getUserId = (req: RequestWithUser): string => {
+  const userId = req.user?.userId;
+  if (!userId) {
+    throw new AuthError("Missing authentication token", "AUTH_MISSING");
+  }
+  return userId;
+};
+
 /**
  * Validates CSV input or email array without persisting data.
  */
@@ -70,7 +78,7 @@ const validateCsv = async (req: RequestWithUser, res: Response, next: NextFuncti
     }
 
     const result = parseEmailList(emails);
-    logger.info({ userId: req.user.userId, total: result.total }, "CSV validated");
+    logger.info({ userId: getUserId(req), total: result.total }, "CSV validated");
 
     res.status(200).json({ success: true, data: result });
   } catch (error) {

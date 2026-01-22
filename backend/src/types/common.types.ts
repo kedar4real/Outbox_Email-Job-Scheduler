@@ -31,13 +31,15 @@ export type JWTPayload = {
 };
 
 export type RequestWithUser = Request & {
-  user: JWTPayload;
+  user?: Express.User;
 };
 
 declare global {
   namespace Express {
-    interface Request {
-      user?: JWTPayload;
+    interface User {
+      userId?: string;
+      email?: string;
+      name?: string | { familyName?: string; givenName?: string; middleName?: string };
     }
   }
 }

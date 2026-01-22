@@ -2,7 +2,7 @@ import { Request } from "express";
 import pinoHttp from "pino-http";
 import { randomUUID } from "crypto";
 
-import { logger } from "../utils/logger";
+import { env } from "../config/env";
 
 const SENSITIVE_KEYS = new Set(["password", "token", "authorization", "cookie"]);
 
@@ -27,11 +27,24 @@ const sanitize = (value: unknown): unknown => {
   return sanitized;
 };
 
+const isDevelopment = env.NODE_ENV === "development";
+const transport = isDevelopment
+  ? {
+      target: "pino-pretty",
+      options: {
+        colorize: true,
+        translateTime: "SYS:standard",
+        ignore: "pid,hostname"
+      }
+    }
+  : undefined;
+
 /**
  * Request/response logging middleware with correlation IDs.
  */
 const requestLogger = pinoHttp({
-  logger,
+  level: env.LOG_LEVEL,
+  transport,
   genReqId: (req, res) => {
     const existing = req.headers["x-correlation-id"];
     const correlationId = Array.isArray(existing) ? existing[0] : existing;
